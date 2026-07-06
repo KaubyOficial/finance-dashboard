@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+/* Theme by class (.dark on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #eef0f6;
+  --border: #e3e6ef;
+  --text: #171a22;
+  --text-muted: #5c6474;
+  --accent: #2f6df6;
+  --accent-soft: #e6efff;
+  --pos: #12855b; /* profit / positive */
+  --neg: #c8372d; /* loss / refund */
+}
+.dark {
+  --bg: #0e1017;
+  --surface: #161a24;
+  --surface-2: #1e2430;
+  --border: #2a313f;
+  --text: #e8eaf0;
+  --text-muted: #98a1b3;
+  --accent: #5b8cff;
+  --accent-soft: #1b2740;
+  --pos: #35c98b;
+  --neg: #f0685c;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Utility shorthands used across the app. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.muted {
+  color: var(--text-muted);
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

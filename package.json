@@ -1,0 +1,46 @@
+{
+  "name": "finance-dashboard",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Dashboard financeiro local por canal do YouTube: receita AdSense (YouTube Analytics API) + vendas Hotmart atribuídas por src/sck + custos manuais/CSV com rateio → P&L/margem multi-moeda.",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "postinstall": "npm run migrate --workspace server --if-present",
+    "dev": "concurrently -n server,web -c cyan,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace server",
+    "dev:web": "npm run dev --workspace web",
+    "build": "npm run build --workspace web",
+    "migrate": "npm run migrate --workspace server",
+    "validate-config": "npm run validate-config --workspace server",
+    "auth": "npm run auth --workspace server --",
+    "channels-check": "npm run channels-check --workspace server",
+    "sync": "npm run sync --workspace server",
+    "sync-all": "npm run sync-all --workspace server",
+    "reattribute": "npm run reattribute --workspace server",
+    "backup": "npm run backup --workspace server",
+    "restore": "npm run restore --workspace server --",
+    "register-task": "npm run register-task --workspace server",
+    "unregister-task": "npm run unregister-task --workspace server",
+    "seed": "npm run seed --workspace server",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspace web",
+    "test": "npm run test --workspace server && npm run test --workspace web",
+    "test:server": "npm run test --workspace server",
+    "test:web": "npm run test --workspace web",
+    "e2e": "npm run e2e --workspace web"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.20.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.24.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

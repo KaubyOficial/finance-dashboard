@@ -1,0 +1,108 @@
+// Orchestrates a full sync: FX + YouTube (all linked channels) + Hotmart.
+// Each source is isolated — one failing doesn't abort the others (partial run).
+import { syncFx } from './fx.js';
+import { syncSales } from './hotmart.js';
+import { syncChannelRevenue } from './youtube.js';
+import { getAccessToken } from '../auth/google.js';
+import { hotmartConfigured, googleConfigured } from '../env.js';
+import { startRun, finishRun } from './syncLog.js';
+import { bumpDataVersion } from '../engine/query.js';
+import { notifyDesktop } from '../util/notify.js';
+import { log } from '../logger.js';
+
+/** Find a non-revoked OAuth account able to reach a channel (by email/label). */
+export function resolveAccountForChannel(db, channel) {
+  const acct = channel.google_account;
+  if (acct) {
+    const row = db
+      .prepare('SELECT account FROM oauth_tokens WHERE revoked = 0 AND (email = ? OR account = ?) LIMIT 1')
+      .get(acct, acct);
+    if (row) return row.account;
+  }
+  // Fallback: any authorized account (single-account setups).
+  const any = db.prepare('SELECT account FROM oauth_tokens WHERE revoked = 0 LIMIT 1').get();
+  return any ? any.account : null;
+}
+
+/**
+ * @param opts.mode 'incremental' | 'backfill'
+ * @param opts.transports optional { fx, hotmart } fake transports for tests
+ * @param opts.only optional array subset of ['fx','youtube','hotmart']
+ */
+export async function runSyncAll(db, { mode = 'incremental', transports = {}, only } = {}) {
+  const want = (s) => !only || only.includes(s);
+  const runId = startRun(db, 'all', mode);
+  const results = { fx: null, youtube: [], hotmart: null, errors: [] };
+
+  // FX first — the engine needs rates to convert everything else.
+  if (want('fx')) {
+    try {
+      results.fx = await syncFx(db, { mode, transport: transports.fx });
+    } catch (e) {
+      results.errors.push(`fx: ${e.message}`);
+    }
+  }
+
+  if (want('youtube')) {
+    if (!googleConfigured() && !transports.youtubeToken) {
+      results.errors.push('youtube: Google não configurado (.env)');
+    } else {
+      const channels = db.prepare('SELECT * FROM channels WHERE active = 1').all();
+      for (const ch of channels) {
+        if (!ch.youtube_channel_id) continue;
+        const account = resolveAccountForChannel(db, ch);
+        if (!account && !transports.youtubeToken) {
+          results.errors.push(`youtube:${ch.id}: sem token autorizado`);
+          continue;
+        }
+        const getToken = transports.youtubeToken || (() => getAccessToken(db, account));
+        try {
+          const r = await syncChannelRevenue(db, { channel: ch, getToken, transport: transports.youtube, mode });
+          results.youtube.push(r);
+        } catch (e) {
+          results.errors.push(`youtube:${ch.id}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  if (want('hotmart')) {
+    if (!hotmartConfigured() && !transports.hotmart) {
+      results.errors.push('hotmart: não configurado (.env)');
+    } else {
+      try {
+        const firstSale = db.prepare('SELECT MIN(order_date) d FROM sales').get()?.d;
+        results.hotmart = await syncSales(db, { mode, since: firstSale, transport: transports.hotmart });
+      } catch (e) {
+        results.errors.push(`hotmart: ${e.message}`);
+      }
+    }
+  }
+
+  bumpDataVersion();
+  const status = results.errors.length ? (hasAnySuccess(results) ? 'partial' : 'error') : 'ok';
+  const rows =
+    (results.fx?.rows || 0) + (results.hotmart?.rows || 0) + results.youtube.reduce((a, r) => a + (r.rows || 0), 0);
+  finishRun(db, runId, {
+    status,
+    rowsUpserted: rows,
+    message: `${mode}: ${results.youtube.length} canais, ${results.errors.length} erro(s)`,
+    detail: results.errors.join(' | ') || null,
+  });
+
+  if (status !== 'ok') {
+    log.warn(`Sync ${status}: ${results.errors.join(' | ')}`);
+    notifyDesktop({
+      title: `⚠️ Finance Dashboard — sync ${status}`,
+      text: results.errors.slice(0, 3).join('\n') || 'ver logs',
+      level: status === 'error' ? 'danger' : 'warn',
+    });
+  } else {
+    log.info(`Sync OK: ${rows} linhas atualizadas.`);
+  }
+  return { status, rows, ...results };
+}
+
+function hasAnySuccess(r) {
+  return !!r.fx || !!r.hotmart || r.youtube.length > 0;
+}

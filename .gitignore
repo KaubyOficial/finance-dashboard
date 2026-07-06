@@ -1,0 +1,25 @@
+# deps
+node_modules/
+# build output
+web/dist/
+# runtime data & secrets — NEVER commit
+server/data/
+web/.e2e-data/
+.env
+.env.*
+!.env.example
+# oauth tokens (belt-and-suspenders; they live under server/data/)
+**/oauth_tokens*
+**/*.token.json
+# logs
+*.log
+# test/coverage artifacts
+coverage/
+test-results/
+playwright-report/
+.playwright/
+# editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

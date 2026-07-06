@@ -1,0 +1,6 @@
+kind;category;description;amount;currency;channel_id;allocation_rule;allocation_custom;start_date;end_date
+recurring;TTS;ElevenLabs plano mensal;99,00;USD;;by_revenue;;2026-01-01;
+recurring;Musica;Suno assinatura;10,00;USD;;equal;;2026-01-01;
+one_off;Narracao;Fiverr narrador DE;40,00;EUR;cortes_de;;;2026-05-10;
+recurring;Ferramenta;vidIQ;49,00;USD;redef_de;;;2026-01-01;2026-06-30
+one_off;Thumbnail;Designer capa;25,00;USD;redef_de;;;2026-06-02;
