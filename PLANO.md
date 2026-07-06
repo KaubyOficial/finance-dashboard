@@ -1,6 +1,10 @@
 # Finance Dashboard — Plano Completo (Epics + Stories)
 
-> **Status: PLANO APROVADO PENDENTE — nada executado ainda.**
+> **Status: ✅ IMPLEMENTADO 2026-07-06.** Todos os 9 epics construídos e validados —
+> `npm test` 84 unit verdes (80 server + 4 web), Playwright e2e 5/5, lint + typecheck
+> limpos, build ok, servidor real testado end-to-end (P&L bate com o seed).
+> **DB = `node:sqlite` embutido** (better-sqlite3 não compila neste ambiente — Node 24 sem MSVC).
+> Falta só o Kauê ligar credenciais reais (`.env`) + IDs de canais (`config/channels.json`).
 > Criado 2026-07-06 a partir do questionário de alinhamento com o Kauê.
 
 ---

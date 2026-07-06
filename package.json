@@ -1,7 +1,7 @@
 {
   "name": "finance-dashboard",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
   "description": "Dashboard financeiro local por canal do YouTube: receita AdSense (YouTube Analytics API) + vendas Hotmart atribuídas por src/sck + custos manuais/CSV com rateio → P&L/margem multi-moeda.",
   "workspaces": [
