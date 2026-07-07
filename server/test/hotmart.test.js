@@ -76,6 +76,21 @@ describe('hotmart pure mappers', () => {
     expect(s.refund_date).toBe('2026-06-15');
     expect(s.order_date).toBe('2026-04-10'); // original kept
   });
+
+  it('falls back to the sale order date when Hotmart gives no refund date', () => {
+    // sales/history & sales/commissions never carry a refund timestamp (probed
+    // 2026-07-07), so a reversal must net against the sale's own month — NOT the
+    // sync date, which piled every lifetime refund into the current month.
+    const item = {
+      purchase: { transaction: 'HP3', status: 'CHARGEBACK', approved_date: ms('2025-08-30'), order_date: ms('2025-08-30'), price: { value: 10, currency_value: 'EUR' }, tracking: {} },
+      product: { id: 3, name: 'Ebook' },
+      commissions: [{ source: 'PRODUCER', value: 9.28, currency_value: 'USD' }],
+    };
+    const s = mapSaleItem(item);
+    expect(s.refund_amount).toBe(9.28);
+    expect(s.refund_date).toBe('2025-08-30'); // sale's own date, not today
+    expect(s.order_date).toBe('2025-08-30');
+  });
 });
 
 describe('upsertSales', () => {

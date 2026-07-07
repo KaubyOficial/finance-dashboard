@@ -21,6 +21,7 @@
     "sync": "npm run sync --workspace server --",
     "sync-all": "npm run sync-all --workspace server --",
     "reattribute": "npm run reattribute --workspace server",
+    "fix-refund-dates": "npm run fix-refund-dates --workspace server",
     "backup": "npm run backup --workspace server",
     "restore": "npm run restore --workspace server --",
     "register-task": "npm run register-task --workspace server",

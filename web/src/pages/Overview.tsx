@@ -60,6 +60,7 @@ export function Overview() {
                 <th className="px-4 py-2">Canal</th>
                 <Th>AdSense</Th>
                 <Th>Hotmart</Th>
+                <Th>Estornos</Th>
                 <Th>Custo</Th>
                 <Th>Lucro</Th>
                 <Th>Margem</Th>
@@ -98,6 +99,9 @@ function ChannelRow({ line, currency }: { line: PnlLine; currency: string }) {
       </td>
       <Td>{money(line.revenue_youtube, currency as any)}</Td>
       <Td>{money(line.revenue_hotmart, currency as any)}</Td>
+      <Td color={line.refunds > 0 ? 'var(--neg)' : undefined}>
+        {line.refunds > 0 ? `−${money(line.refunds, currency as any)}` : '—'}
+      </Td>
       <Td>{money(line.cost_total, currency as any)}</Td>
       <Td strong color={line.profit >= 0 ? 'var(--pos)' : 'var(--neg)'}>
         {money(line.profit, currency as any)}

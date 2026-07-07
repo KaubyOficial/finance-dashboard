@@ -49,7 +49,7 @@ export function pickCommission(commissions = [], preferredRole = env.hotmart.rol
  * `commissionsByTx` (Map transaction → commissions[]) comes from the sales/commissions
  * sweep; when absent we fall back to item.commissions (older payloads / fixtures).
  */
-export function mapSaleItem(item, { syncDate = todayUTC(), commissionsByTx = null } = {}) {
+export function mapSaleItem(item, { commissionsByTx = null } = {}) {
   const purchase = item.purchase || {};
   const price = purchase.price || {};
   const tracking = purchase.tracking || {};
@@ -57,9 +57,15 @@ export function mapSaleItem(item, { syncDate = todayUTC(), commissionsByTx = nul
   const commission = pickCommission(commissionsByTx?.get(purchase.transaction) ?? item.commissions);
   const orderDate = epochToDate(purchase.approved_date || purchase.order_date);
 
+  // Hotmart's sales/history & sales/commissions endpoints do NOT expose a refund/
+  // chargeback timestamp (probed 2026-07-07: no refund_date/date_refund/last_update
+  // in either payload). When it is genuinely absent we book the reversal on the
+  // SALE's own date so it nets against the same month the commission was recognised
+  // (the date shown in the channel drill-down) — never on the sync date, which used
+  // to dump every lifetime refund into the current month.
   const isRefund = REFUND_STATUSES.has(status);
   const refundDate = isRefund
-    ? epochToDate(purchase.refund_date || purchase.date_refund || purchase.last_update) || syncDate
+    ? epochToDate(purchase.refund_date || purchase.date_refund || purchase.last_update) || orderDate
     : null;
   // Partial refunds carry the reversed slice when Hotmart provides it; otherwise
   // a full status reverses the whole commission.
@@ -200,7 +206,7 @@ export async function syncSales(db, { since, mode = 'incremental', transport } =
   try {
     const items = await fetchAllSales({ startDate, endDate, transport });
     const commissionsByTx = await fetchAllCommissions({ startDate, endDate, transport });
-    const rows = items.map((it) => mapSaleItem(it, { syncDate: endDate, commissionsByTx }));
+    const rows = items.map((it) => mapSaleItem(it, { commissionsByTx }));
     const n = upsertSales(db, rows);
     finishRun(db, runId, { status: 'ok', rowsUpserted: n, message: `${mode} ${startDate}→${endDate}` });
     return { rows: n, from: startDate, to: endDate, mode };
