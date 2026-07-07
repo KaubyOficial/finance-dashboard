@@ -45,13 +45,18 @@ export async function getHotmartToken({ transport = defaultTransport, now = Date
   return cache.token;
 }
 
-/** GET a Hotmart API path with the bearer token. Returns parsed JSON. */
+/** GET a Hotmart API path with the bearer token. Returns parsed JSON.
+ *  Array query values become repeated params (e.g. transaction_status). */
 export async function hotmartGet(path, query = {}, { transport = defaultTransport } = {}) {
   const token = await getHotmartToken({ transport });
   const host = HOSTS[env.hotmart.environment] || HOSTS.production;
-  const qs = new URLSearchParams(
-    Object.entries(query).filter(([, v]) => v !== undefined && v !== null && v !== '')
-  ).toString();
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v === undefined || v === null || v === '') continue;
+    if (Array.isArray(v)) for (const item of v) params.append(k, item);
+    else params.append(k, v);
+  }
+  const qs = params.toString();
   const url = `${host.api}${path}${qs ? `?${qs}` : ''}`;
   const res = await transport(url, { headers: { Authorization: `Bearer ${token}` } });
   if (res.status === 429) {

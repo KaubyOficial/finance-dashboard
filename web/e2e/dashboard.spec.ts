@@ -58,3 +58,19 @@ test('settings shows sync sources and Sync now', async ({ page }) => {
   await expect(page.getByText('YouTube (AdSense)')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Sync now' })).toBeVisible();
 });
+
+test('settings shows the FX rate of the day', async ({ page }) => {
+  await page.goto('/settings');
+  await expect(page.getByText(/taxa do dia/)).toBeVisible();
+  await expect(page.getByText(/US\$ 1 = R\$/)).toBeVisible();
+});
+
+test('daily revenue page lists days and opens the channel breakdown', async ({ page }) => {
+  await page.goto('/daily');
+  await expect(page.getByRole('heading', { name: 'Receita diária' })).toBeVisible();
+  // Most recent seeded day (30/06/2026) is on top; expanding shows per-channel lines.
+  const dayRow = page.getByRole('cell', { name: /30\/06\/2026/ });
+  await expect(dayRow).toBeVisible();
+  await dayRow.click();
+  await expect(page.getByText('REDE F — Alemão')).toBeVisible();
+});

@@ -1,16 +1,22 @@
 // Hotmart sales sync (Epic 2). Pure mappers (item→sale, pagination, refund
 // detection) are separated from network so they unit-test with fixtures (S2.2).
 import { hotmartGet } from '../auth/hotmart.js';
-import { buildAttributionResolver, getConfigChannels } from '../config/channels.js';
+import { buildAttributionResolver, buildProductResolver, getConfigChannels } from '../config/channels.js';
 import { attributeSale } from './attribution.js';
 import { startRun, finishRun } from './syncLog.js';
-import { todayUTC } from '../util/dates.js';
+import { todayUTC, chunkDateRange } from '../util/dates.js';
 import { env } from '../env.js';
 import { log } from '../logger.js';
 
 export const REFUND_STATUSES = new Set(['REFUNDED', 'CHARGEBACK', 'PARTIALLY_REFUNDED', 'PROTESTED']);
 export const BACKFILL_CHUNK_DAYS = 90;
+// Hotmart 400s date windows past ~1 year (12 months OK, 2 years rejected — probed
+// 2026-07-07), so any sweep is chunked into windows of at most this many days.
+export const MAX_WINDOW_DAYS = 360;
 const SALES_PATH = '/payments/api/v1/sales/history';
+// sales/history does NOT return commissions[] (only producer/product/buyer/purchase),
+// so the net commission comes from a second sweep on this endpoint, matched by transaction.
+const COMMISSIONS_PATH = '/payments/api/v1/sales/commissions';
 
 /** Epoch (ms or s) → 'YYYY-MM-DD'. Returns null on missing. */
 export function epochToDate(v) {
@@ -32,18 +38,23 @@ export function pickCommission(commissions = [], preferredRole = env.hotmart.rol
   if (!chosen) chosen = usable[0];
   return {
     amount: Number(chosen.value ?? chosen.commission?.value ?? 0) || 0,
-    currency: chosen.currency_value || chosen.currency || 'BRL',
+    // sales/commissions nests it as commission.currency_code (payout currency).
+    currency: chosen.currency_value || chosen.currency || chosen.commission?.currency_code || 'BRL',
     role: chosen.source || null,
   };
 }
 
-/** Map one sales/history item into our `sales` row shape (attribution added later). */
-export function mapSaleItem(item, { syncDate = todayUTC() } = {}) {
+/**
+ * Map one sales/history item into our `sales` row shape (attribution added later).
+ * `commissionsByTx` (Map transaction → commissions[]) comes from the sales/commissions
+ * sweep; when absent we fall back to item.commissions (older payloads / fixtures).
+ */
+export function mapSaleItem(item, { syncDate = todayUTC(), commissionsByTx = null } = {}) {
   const purchase = item.purchase || {};
   const price = purchase.price || {};
   const tracking = purchase.tracking || {};
   const status = String(purchase.status || '').toUpperCase();
-  const commission = pickCommission(item.commissions);
+  const commission = pickCommission(commissionsByTx?.get(purchase.transaction) ?? item.commissions);
   const orderDate = epochToDate(purchase.approved_date || purchase.order_date);
 
   const isRefund = REFUND_STATUSES.has(status);
@@ -77,7 +88,9 @@ export function mapSaleItem(item, { syncDate = todayUTC() } = {}) {
 
 /** Idempotent upsert by transaction_id. Preserves manual attribution (S2.5). */
 export function upsertSales(db, rows) {
-  const resolve = buildAttributionResolver(getConfigChannels());
+  const channels = getConfigChannels();
+  const resolve = buildAttributionResolver(channels);
+  const resolveProduct = buildProductResolver(channels);
   const getPrev = db.prepare('SELECT channel_id, attribution_source FROM sales WHERE transaction_id = ?');
   const stmt = db.prepare(`
     INSERT INTO sales
@@ -111,7 +124,7 @@ export function upsertSales(db, rows) {
     for (const r of list) {
       if (!r.transaction_id) continue;
       const prev = getPrev.get(r.transaction_id);
-      const attr = attributeSale(r, resolve, { previous: prev });
+      const attr = attributeSale(r, resolve, { previous: prev, resolveProduct });
       stmt.run({ ...r, channel_id: attr.channel_id, attribution_source: attr.attribution_source });
       n++;
     }
@@ -120,23 +133,59 @@ export function upsertSales(db, rows) {
   return n;
 }
 
-/** Paginate every page of sales/history for a window. `transport` is injectable. */
-export async function fetchAllSales({ startDate, endDate, transport } = {}) {
-  const startMs = Date.parse(`${startDate}T00:00:00Z`);
-  const endMs = Date.parse(`${endDate}T23:59:59Z`);
-  const all = [];
-  let pageToken;
-  for (let guard = 0; guard < 10_000; guard++) {
-    const page = await hotmartGet(
-      SALES_PATH,
-      { start_date: startMs, end_date: endMs, max_results: 100, page_token: pageToken },
-      { transport }
-    );
-    for (const it of page.items || []) all.push(it);
-    pageToken = page.page_info?.next_page_token;
-    if (!pageToken) break;
+/**
+ * Paginate every page of a Hotmart list endpoint across ≤MAX_WINDOW_DAYS chunks.
+ * WITHOUT transaction_status Hotmart returns ONLY APPROVED+COMPLETE (probed:
+ * REFUNDED/CHARGEBACK/… are excluded from the default response), so callers do a
+ * second sweep with the refund statuses to keep reversals visible.
+ */
+async function fetchAllPages(path, { startDate, endDate, transport, statuses = null } = {}) {
+  const items = [];
+  for (const chunk of chunkDateRange(startDate, endDate, MAX_WINDOW_DAYS)) {
+    const startMs = Date.parse(`${chunk.from}T00:00:00.000Z`);
+    const endMs = Date.parse(`${chunk.to}T23:59:59.999Z`);
+    let pageToken;
+    for (let guard = 0; guard < 10_000; guard++) {
+      const page = await hotmartGet(
+        path,
+        { start_date: startMs, end_date: endMs, max_results: 100, page_token: pageToken, transaction_status: statuses },
+        { transport }
+      );
+      for (const it of page.items || []) items.push(it);
+      pageToken = page.page_info?.next_page_token;
+      if (!pageToken) break;
+    }
   }
-  return all;
+  return items;
+}
+
+/**
+ * Every sale in [startDate, endDate]: the default sweep (approved/complete) plus
+ * a refund-status sweep, de-duplicated by transaction (refund state wins — it is
+ * the newer state of the same purchase).
+ */
+export async function fetchAllSales({ startDate, endDate, transport } = {}) {
+  const base = await fetchAllPages(SALES_PATH, { startDate, endDate, transport });
+  const refunds = await fetchAllPages(SALES_PATH, { startDate, endDate, transport, statuses: [...REFUND_STATUSES] });
+  const byTx = new Map();
+  const anonymous = [];
+  for (const it of [...base, ...refunds]) {
+    const tx = it.purchase?.transaction;
+    if (tx) byTx.set(tx, it);
+    else anonymous.push(it);
+  }
+  return [...byTx.values(), ...anonymous];
+}
+
+/** sales/commissions (both sweeps) into a Map(transaction → commissions[]). */
+export async function fetchAllCommissions({ startDate, endDate, transport } = {}) {
+  const base = await fetchAllPages(COMMISSIONS_PATH, { startDate, endDate, transport });
+  const refunds = await fetchAllPages(COMMISSIONS_PATH, { startDate, endDate, transport, statuses: [...REFUND_STATUSES] });
+  const byTx = new Map();
+  for (const it of [...base, ...refunds]) {
+    if (it.transaction) byTx.set(it.transaction, it.commissions || []);
+  }
+  return byTx;
 }
 
 /**
@@ -150,7 +199,8 @@ export async function syncSales(db, { since, mode = 'incremental', transport } =
   const runId = startRun(db, 'hotmart', mode);
   try {
     const items = await fetchAllSales({ startDate, endDate, transport });
-    const rows = items.map((it) => mapSaleItem(it, { syncDate: endDate }));
+    const commissionsByTx = await fetchAllCommissions({ startDate, endDate, transport });
+    const rows = items.map((it) => mapSaleItem(it, { syncDate: endDate, commissionsByTx }));
     const n = upsertSales(db, rows);
     finishRun(db, runId, { status: 'ok', rowsUpserted: n, message: `${mode} ${startDate}→${endDate}` });
     return { rows: n, from: startDate, to: endDate, mode };

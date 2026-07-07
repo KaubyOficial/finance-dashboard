@@ -71,8 +71,9 @@ export async function runSyncAll(db, { mode = 'incremental', transports = {}, on
       results.errors.push('hotmart: não configurado (.env)');
     } else {
       try {
-        const firstSale = db.prepare('SELECT MIN(order_date) d FROM sales').get()?.d;
-        results.hotmart = await syncSales(db, { mode, since: firstSale, transport: transports.hotmart });
+        // NB: do NOT pass since = MIN(order_date) from our own DB — that shrinks
+        // a lifetime backfill to "sales we already know about" (bug found 2026-07-07).
+        results.hotmart = await syncSales(db, { mode, transport: transports.hotmart });
       } catch (e) {
         results.errors.push(`hotmart: ${e.message}`);
       }

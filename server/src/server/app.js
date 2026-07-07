@@ -2,7 +2,7 @@
 // integration tests (S4.3). All endpoints under /api. Localhost-only (S7.4).
 import Fastify from 'fastify';
 import { z } from 'zod';
-import { getPnL, salesForChannel, bumpDataVersion } from '../engine/query.js';
+import { getPnL, getDailyRevenue, salesForChannel, bumpDataVersion } from '../engine/query.js';
 import { UNATTRIBUTED } from '../engine/pnl.js';
 import { withDerived } from '../engine/derived.js';
 import { createCost, updateCost, deleteCost, listCosts } from '../costs/service.js';
@@ -12,11 +12,13 @@ import { recentRuns } from '../sync/syncLog.js';
 import { dataFreshness, tokenStatus, syncHealthy } from '../status.js';
 import { getConfigChannels } from '../config/channels.js';
 import { triggerSync, getSyncState } from './syncRunner.js';
-import { todayUTC, addDays, monthStart } from '../util/dates.js';
+import { todayUTC, addDays, monthStart, monthKey } from '../util/dates.js';
 
 const DEFAULTS = () => {
   const to = todayUTC();
-  const from = monthStart(addDays(to, -364)); // ~12 months back, first of that month
+  // First day of the month ~12 months back. monthStart expects a 'YYYY-MM' key,
+  // so reduce the full date through monthKey first (else it builds 'YYYY-MM-DD-01').
+  const from = monthStart(monthKey(addDays(to, -364)));
   return { from, to };
 };
 
@@ -75,7 +77,7 @@ export function buildApp(db, { logger = false } = {}) {
       .prepare(
         `SELECT c.*,
            (SELECT MAX(date) FROM revenue_daily r WHERE r.channel_id = c.id) AS revenue_until
-         FROM channels c ORDER BY c.name`
+         FROM channels c WHERE c.active = 1 ORDER BY c.name`
       )
       .all();
     return { channels: rows };
@@ -83,6 +85,9 @@ export function buildApp(db, { logger = false } = {}) {
 
   // ── P&L ─────────────────────────────────────────────────────────────────────
   app.get('/api/pnl', async (req) => getPnL(db, parsePnlParams(req.query)));
+
+  // Day-by-day revenue (AdSense + Hotmart − refunds; no costs) — "Receita diária".
+  app.get('/api/revenue/daily', async (req) => getDailyRevenue(db, parsePnlParams(req.query)));
 
   app.get('/api/channels/:id', async (req) => {
     const id = req.params.id;

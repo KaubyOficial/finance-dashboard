@@ -72,7 +72,7 @@ export interface SyncStatus {
 export interface Freshness {
   youtube: { dataUntil: string | null; lastRun: SyncRun | null; provisionalDays: number };
   hotmart: { dataUntil: string | null; lastRun: SyncRun | null; stale: boolean };
-  fx: { dataUntil: string | null; lastRun: SyncRun | null; stale: boolean };
+  fx: { dataUntil: string | null; lastRun: SyncRun | null; stale: boolean; latest: Partial<Record<Currency, number>> | null };
   all: SyncRun | null;
   today: { utc: string; la: string };
 }
@@ -97,10 +97,14 @@ export interface TokenStatus {
 }
 
 async function req<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
-  });
+  // Only declare a JSON content-type when we actually send a body. A bodyless
+  // request (e.g. DELETE) with `Content-Type: application/json` makes Fastify
+  // reject it with 400 "Body cannot be empty…".
+  const headers: Record<string, string> = { ...((init?.headers as Record<string, string>) || {}) };
+  if (init?.body != null && headers['Content-Type'] == null) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(url, { ...init, headers });
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
@@ -127,6 +131,11 @@ export const api = {
     if (p.channels?.length) q.set('channels', p.channels.join(','));
     return req<PnlResponse>(`/api/pnl?${q}`);
   },
+  revenueDaily: (p: Omit<PnlParams, 'groupBy'>) => {
+    const q = new URLSearchParams({ from: p.from, to: p.to, currency: p.currency });
+    if (p.channels?.length) q.set('channels', p.channels.join(','));
+    return req<DailyRevenueResponse>(`/api/revenue/daily?${q}`);
+  },
   channels: () => req<{ channels: Channel[] }>('/api/channels'),
   channelDetail: (id: string, p: PnlParams) => {
     const q = new URLSearchParams({ from: p.from, to: p.to, currency: p.currency });
@@ -142,6 +151,30 @@ export const api = {
     req<{ started: boolean; reason?: string }>('/api/sync', { method: 'POST', body: JSON.stringify({ mode, only }) }),
   config: () => req<{ channels: { id: string; name: string }[]; currencies: Currency[] }>('/api/config'),
 };
+
+export interface DailyRevenueLine {
+  revenue_youtube: number;
+  revenue_hotmart: number;
+  refunds: number;
+  revenue_total: number;
+  views: number;
+}
+export interface DailyChannelLine extends DailyRevenueLine {
+  channel_id: string | null;
+  channel_name: string;
+}
+export interface DailyRevenueDay extends DailyRevenueLine {
+  date: string;
+  provisional: boolean;
+  channels: DailyChannelLine[];
+}
+export interface DailyRevenueResponse {
+  from: string;
+  to: string;
+  currency: Currency;
+  days: DailyRevenueDay[];
+  totals: DailyRevenueLine;
+}
 
 export interface Sale {
   transaction_id: string;

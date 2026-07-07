@@ -85,14 +85,14 @@ export function chunkDateRange(start, end, size) {
   let from = start;
   while (daysBetween(from, end) >= 0) {
     let to = addDays(from, size - 1);
-    if (daysBetween(to, end) > 0) to = end;
+    if (daysBetween(to, end) < 0) to = end; // clamp only when `to` overshoots `end`
     chunks.push({ from, to });
     from = addDays(to, 1);
   }
   return chunks;
 }
 
-/** Clamp `date` to not exceed `max`. */
+/** Clamp `date` to not exceed `max` (returns the earlier of the two). */
 export function minDate(date, max) {
-  return daysBetween(date, max) < 0 ? date : max;
+  return daysBetween(date, max) < 0 ? max : date;
 }

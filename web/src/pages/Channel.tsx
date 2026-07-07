@@ -54,6 +54,7 @@ export function Channel() {
               <th className="px-4 py-2 text-right font-normal">Estornos</th>
               <th className="px-4 py-2 text-right font-normal">Custo</th>
               <th className="px-4 py-2 text-right font-normal">Lucro</th>
+              <th className="px-4 py-2 text-right font-normal">Margem</th>
             </tr>
           </thead>
           <tbody>
@@ -69,6 +70,7 @@ export function Channel() {
                 <td className="tabular px-4 py-2 text-right font-semibold" style={{ color: m.profit >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
                   {money(m.profit, currency)}
                 </td>
+                <td className="tabular px-4 py-2 text-right">{pct(m.margin)}</td>
               </tr>
             ))}
           </tbody>

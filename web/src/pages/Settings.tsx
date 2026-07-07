@@ -44,7 +44,9 @@ export function Settings() {
       <div className="grid gap-3 md:grid-cols-3">
         <SourceCard title="YouTube (AdSense)" until={f.youtube.dataUntil} ok={!!f.youtube.dataUntil} note={`${f.youtube.provisionalDays} dias provisórios`} last={f.youtube.lastRun?.status} />
         <SourceCard title="Hotmart (vendas)" until={f.hotmart.dataUntil} ok={!f.hotmart.stale} note={f.hotmart.stale ? '⚠️ sem sync há >48h' : 'em dia'} last={f.hotmart.lastRun?.status} />
-        <SourceCard title="Câmbio (ECB)" until={f.fx.dataUntil} ok={!f.fx.stale} note={f.fx.stale ? '⚠️ desatualizado' : 'em dia'} last={f.fx.lastRun?.status} />
+        <SourceCard title="Câmbio (ECB)" until={f.fx.dataUntil} ok={!f.fx.stale} note={f.fx.stale ? '⚠️ desatualizado' : 'em dia'} last={f.fx.lastRun?.status}>
+          <FxRates latest={f.fx.latest} date={f.fx.dataUntil} />
+        </SourceCard>
       </div>
 
       <section className="card p-4">
@@ -91,7 +93,7 @@ export function Settings() {
   );
 }
 
-function SourceCard({ title, until, ok, note, last }: { title: string; until: string | null; ok: boolean; note: string; last?: string }) {
+function SourceCard({ title, until, ok, note, last, children }: { title: string; until: string | null; ok: boolean; note: string; last?: string; children?: React.ReactNode }) {
   return (
     <div className="card p-4">
       <div className="flex items-center gap-2">
@@ -101,6 +103,23 @@ function SourceCard({ title, until, ok, note, last }: { title: string; until: st
       <p className="muted mt-2 text-xs">dados até {dateBR(until)}</p>
       <p className="muted text-xs">{note}</p>
       {last && <p className="muted text-xs">última execução: {last}</p>}
+      {children}
+    </div>
+  );
+}
+
+/** The rate set of the day the engine is converting with (EUR-based ECB). */
+function FxRates({ latest, date }: { latest: Partial<Record<'USD' | 'BRL', number>> | null; date: string | null }) {
+  if (!latest || latest.USD == null || latest.BRL == null) {
+    return <p className="muted mt-2 text-xs">sem taxas carregadas — rode um sync</p>;
+  }
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return (
+    <div className="mt-2 rounded-lg border p-2 text-xs" style={{ borderColor: 'var(--border)' }}>
+      <p className="muted mb-1">taxa do dia {dateBR(date)}:</p>
+      <p className="tabular">€ 1 = US$ {fmt(latest.USD)}</p>
+      <p className="tabular">€ 1 = R$ {fmt(latest.BRL)}</p>
+      <p className="tabular">US$ 1 = R$ {fmt(latest.BRL / latest.USD)}</p>
     </div>
   );
 }

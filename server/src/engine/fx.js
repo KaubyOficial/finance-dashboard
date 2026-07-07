@@ -1,6 +1,8 @@
 // Currency conversion. Rates are ECB/Frankfurter, stored EUR-based; we cross
-// through EUR. Weekend/holiday with no rate → use the last available prior rate
-// (documented). A date after the latest known rate → error (S4.1 AC).
+// through EUR. A day with no rate (weekend/holiday) uses the last available
+// PRIOR rate. A date AFTER the newest rate (today before ECB publishes, or a
+// future-dated cost) clamps FORWARD to the newest rate — a dashboard must never
+// go blank just because a row's date is a day or two ahead of the FX feed.
 
 /**
  * Build a converter from fx rows [{date, base:'EUR', quote, rate}].
@@ -19,7 +21,7 @@ export function makeConverter(fxRows) {
   function rateSetFor(date) {
     if (byDate.has(date)) return byDate.get(date);
     if (!dates.length) return null;
-    if (date > maxDate) return null; // future beyond data → caller errors
+    if (date > maxDate) return byDate.get(maxDate); // no published rate yet → newest known
     // binary search for the latest date <= requested
     let lo = 0;
     let hi = dates.length - 1;

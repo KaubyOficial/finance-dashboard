@@ -56,8 +56,9 @@ describe('P&L engine — properties', () => {
         const { byChannel, network } = computePnL(inputs, { ...range, displayCurrency: 'USD', convert });
         const rev = byChannel.reduce((s, r) => s + r.revenue_total, 0);
         const profit = byChannel.reduce((s, r) => s + r.profit, 0);
-        expect(rev).toBeCloseTo(network.revenue_total, 5);
-        expect(profit).toBeCloseTo(network.profit, 5);
+        // All-empty inputs produce no cells → network is null (≡ zero totals).
+        expect(rev).toBeCloseTo(network ? network.revenue_total : 0, 5);
+        expect(profit).toBeCloseTo(network ? network.profit : 0, 5);
       })
     );
   });

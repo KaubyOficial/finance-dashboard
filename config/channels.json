@@ -1,75 +1,52 @@
 {
   "version": 1,
-  "_readme": "Mapa canal → conta Google + códigos de tracking Hotmart. Preencha 'youtube_channel_id' (UC...) e 'google_account' (e-mail dono/gerente do canal). 'src_prefixes' = prefixos de 'src'/'sck' usados nos links das descrições (ver docs/tracking-convention.md). Rode `npm run validate-config` após editar. Campos vazios são sinalizados como PENDENTE pelo validador, não quebram o arquivo.",
+  "_readme": "Mapa canal → conta Google + códigos de tracking Hotmart. Preencha 'youtube_channel_id' (UC...) e 'google_account' (e-mail dono/gerente do canal). 'src_prefixes' = prefixos de 'src'/'sck' usados nos links das descrições (ver docs/tracking-convention.md). 'hotmart_product_ids' = fallback de atribuição por produto: quando o src/sck da venda não bate com nenhum prefixo, o canal dono do produto leva a venda (produtos são por idioma; decisão Kauê 2026-07-07: todo produto alemão é do REDE F DE, não do Cortes DE). Rode `npm run validate-config` após editar. Campos vazios são sinalizados como PENDENTE pelo validador, não quebram o arquivo.",
   "channels": [
-    {
-      "id": "redef_pt",
-      "name": "REDE F — Português (BR)",
-      "youtube_channel_id": "",
-      "google_account": "",
-      "src_prefixes": ["yt_redef_pt"],
-      "launch_date": "2023-06-01",
-      "reference_currency": "USD"
-    },
-    {
-      "id": "redef_en",
-      "name": "REDE F — Inglês (EN-IE)",
-      "youtube_channel_id": "",
-      "google_account": "",
-      "src_prefixes": ["yt_redef_en"],
-      "launch_date": "2023-06-01",
-      "reference_currency": "USD"
-    },
-    {
-      "id": "redef_es",
-      "name": "REDE F — Espanhol",
-      "youtube_channel_id": "",
-      "google_account": "",
-      "src_prefixes": ["yt_redef_es"],
-      "launch_date": "2023-06-01",
-      "reference_currency": "USD"
-    },
     {
       "id": "redef_fr",
       "name": "REDE F — Francês",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UCvZ-Z5093x6bXJBlhhwivWA",
+      "google_account": "financefuteeoficial@gmail.com",
       "src_prefixes": ["yt_redef_fr"],
+      "hotmart_product_ids": ["7547493", "7584841"],
       "launch_date": "2023-06-01",
       "reference_currency": "USD"
     },
     {
       "id": "redef_it",
       "name": "REDE F — Italiano",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UCLjInQvI80wFIX6r6LEsIDw",
+      "google_account": "percorsoriccoaccess@gmail.com",
       "src_prefixes": ["yt_redef_it"],
+      "hotmart_product_ids": ["7547467", "7584846", "7884221"],
       "launch_date": "2023-06-01",
       "reference_currency": "USD"
     },
     {
       "id": "redef_nl",
       "name": "REDE F — Holandês",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UCWv5trnhnHLvHRKicdqIjMw",
+      "google_account": "rijketoekomstaccess@gmail.com",
       "src_prefixes": ["yt_redef_nl"],
+      "hotmart_product_ids": ["7547441", "7584836"],
       "launch_date": "2023-06-01",
       "reference_currency": "USD"
     },
     {
       "id": "redef_de",
       "name": "REDE F — Alemão",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UCMIXxfZFmByq7bEQe8cXVng",
+      "google_account": "finanziellevisionacess@gmail.com",
       "src_prefixes": ["yt_redef_de"],
+      "hotmart_product_ids": ["5998559", "7584832", "7884137"],
       "launch_date": "2023-06-01",
       "reference_currency": "USD"
     },
     {
       "id": "cortes_de",
       "name": "Kauby — Canal de Cortes DE (Bullion Capital)",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UCNJYBkpwR2yn7MWRA_hbcYg",
+      "google_account": "merfinansaccess@gmail.com",
       "src_prefixes": ["yt_cortes_de"],
       "launch_date": "2026-06-01",
       "reference_currency": "USD"
@@ -77,8 +54,8 @@
     {
       "id": "orchestral_a",
       "name": "Cinematic Orchestral — World A (Chamber of Legacy)",
-      "youtube_channel_id": "",
-      "google_account": "",
+      "youtube_channel_id": "UC6CpUoFRkHQNxapXoEvffvQ",
+      "google_account": "kaue.r02contato@gmail.com",
       "src_prefixes": ["yt_orchestral_a"],
       "launch_date": "2026-05-01",
       "reference_currency": "USD"

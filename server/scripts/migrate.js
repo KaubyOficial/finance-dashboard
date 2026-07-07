@@ -15,8 +15,9 @@ if (applied.length) {
 
 // Keep the channels table in sync with config on every migrate (best-effort).
 try {
-  const { added, updated } = syncChannelsFromConfig(db);
-  log.info(`Canais sincronizados do config: +${added} novos, ${updated} atualizados.`);
+  const { added, updated, removed, deactivated } = syncChannelsFromConfig(db);
+  const pruned = [removed && `${removed} removidos`, deactivated && `${deactivated} desativados`].filter(Boolean).join(', ');
+  log.info(`Canais sincronizados do config: +${added} novos, ${updated} atualizados${pruned ? `, ${pruned}` : ''}.`);
 } catch (e) {
   log.warn(`Config de canais não sincronizada: ${e.message}`);
 }

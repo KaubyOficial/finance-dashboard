@@ -17,7 +17,17 @@ export function dataFreshness(db) {
       staleHours: hmMax ? null : null,
       stale: hmStale(db),
     },
-    fx: { dataUntil: fxMax, lastRun: runs.fx || null, stale: fxMax ? daysBetween(fxMax, todayUTC()) > 4 : true },
+    fx: {
+      dataUntil: fxMax,
+      lastRun: runs.fx || null,
+      stale: fxMax ? daysBetween(fxMax, todayUTC()) > 4 : true,
+      // Latest rate set actually used by the engine (EUR-based: 1 EUR = rate quote).
+      latest: fxMax
+        ? Object.fromEntries(
+            db.prepare("SELECT quote, rate FROM fx_rates WHERE date = ? AND base = 'EUR'").all(fxMax).map((r) => [r.quote, r.rate])
+          )
+        : null,
+    },
     all: runs.all || null,
     today: { utc: todayUTC(), la: todayLA() },
   };

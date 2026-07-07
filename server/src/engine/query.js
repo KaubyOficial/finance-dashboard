@@ -91,6 +91,96 @@ function safeCells(inputs, opts, filter) {
   return cells.filter((c) => (c.channel_id === null ? filter.has(UNATTRIBUTED) : filter.has(c.channel_id)));
 }
 
+/**
+ * Day-by-day REVENUE (no costs): AdSense + Hotmart commissions (by order date)
+ * − refunds (by refund date), converted to the display currency at each day's
+ * rate. Only days with movement are returned (ascending), each with a
+ * per-channel breakdown. Cached like getPnL.
+ */
+export function getDailyRevenue(db, { from, to, displayCurrency = 'USD', channels = null } = {}) {
+  const key = JSON.stringify({ daily: true, from, to, displayCurrency, channels: channels ? [...channels].sort() : null, dataVersion });
+  if (cache.has(key)) return cache.get(key);
+
+  const inputs = loadInputs(db, { from, to });
+  const convert = makeConverter(inputs.fx);
+  const names = Object.fromEntries(inputs.channels.map((c) => [c.id, c.name]));
+  const filter = channels && channels.length ? new Set(channels) : null;
+  const wanted = (chId) => !filter || filter.has(chId ?? UNATTRIBUTED);
+
+  const days = new Map(); // date -> { date, provisional, channels: Map }
+  const day = (date) => {
+    if (!days.has(date)) days.set(date, { date, provisional: false, channels: new Map() });
+    return days.get(date);
+  };
+  const chanLine = (d, chId) => {
+    const k = chId ?? UNATTRIBUTED;
+    if (!d.channels.has(k)) {
+      d.channels.set(k, {
+        channel_id: chId ?? null,
+        channel_name: chId ? names[chId] || chId : 'Não atribuído',
+        revenue_youtube: 0,
+        revenue_hotmart: 0,
+        refunds: 0,
+        views: 0,
+      });
+    }
+    return d.channels.get(k);
+  };
+
+  for (const r of inputs.revenue) {
+    if (r.date < from || r.date > to || !wanted(r.channel_id)) continue;
+    const d = day(r.date);
+    const line = chanLine(d, r.channel_id);
+    line.revenue_youtube += convert(r.estimated_revenue || 0, r.currency || 'USD', displayCurrency, r.date);
+    line.views += r.views || 0;
+    if (r.provisional) d.provisional = true;
+  }
+  for (const s of inputs.sales) {
+    if (!wanted(s.channel_id)) continue;
+    if (s.order_date && s.order_date >= from && s.order_date <= to && s.commission_amount) {
+      chanLine(day(s.order_date), s.channel_id).revenue_hotmart +=
+        convert(s.commission_amount, s.commission_currency || 'BRL', displayCurrency, s.order_date);
+    }
+    if (s.refund_amount > 0 && s.refund_date && s.refund_date >= from && s.refund_date <= to) {
+      chanLine(day(s.refund_date), s.channel_id).refunds +=
+        convert(s.refund_amount, s.commission_currency || 'BRL', displayCurrency, s.refund_date);
+    }
+  }
+
+  const totalize = (line) => ({ ...line, revenue_total: line.revenue_youtube + line.revenue_hotmart - line.refunds });
+  const list = [...days.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d) => {
+      const chans = [...d.channels.values()].map(totalize).sort((a, b) => b.revenue_total - a.revenue_total);
+      const sum = (f) => chans.reduce((acc, c) => acc + c[f], 0);
+      return totalize({
+        date: d.date,
+        provisional: d.provisional,
+        revenue_youtube: sum('revenue_youtube'),
+        revenue_hotmart: sum('revenue_hotmart'),
+        refunds: sum('refunds'),
+        views: sum('views'),
+        channels: chans,
+      });
+    });
+
+  const sumAll = (f) => list.reduce((acc, d) => acc + d[f], 0);
+  const result = {
+    from,
+    to,
+    currency: displayCurrency,
+    days: list,
+    totals: totalize({
+      revenue_youtube: sumAll('revenue_youtube'),
+      revenue_hotmart: sumAll('revenue_hotmart'),
+      refunds: sumAll('refunds'),
+      views: sumAll('views'),
+    }),
+  };
+  cache.set(key, result);
+  return result;
+}
+
 /** Sales list for a channel's drill-down (S5.3). */
 export function salesForChannel(db, channelId, { from, to } = {}) {
   const args = [];

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { attributeSale, reattributeAll, manualAttribute, unattributedStats } from '../src/sync/attribution.js';
-import { buildAttributionResolver } from '../src/config/channels.js';
+import { buildAttributionResolver, buildProductResolver } from '../src/config/channels.js';
 import { makeDb } from './helpers.js';
 import { upsertSales } from '../src/sync/hotmart.js';
 
@@ -22,6 +22,40 @@ describe('attributeSale matrix', () => {
   it('manual previous is preserved', () => {
     const r = attributeSale({ src: 'yt_redef_de' }, resolve, { previous: { attribution_source: 'manual', channel_id: 'cortes_de' } });
     expect(r).toEqual({ channel_id: 'cortes_de', attribution_source: 'manual' });
+  });
+});
+
+describe('product → channel fallback', () => {
+  const resolveProduct = buildProductResolver([
+    { id: 'redef_de', src_prefixes: ['yt_redef_de'], hotmart_product_ids: ['5998559', 7584832] },
+    { id: 'redef_it', src_prefixes: ['yt_redef_it'], hotmart_product_ids: ['7547467'] },
+  ]);
+
+  it('kicks in when src/sck match nothing (per-video codes like v2)', () => {
+    const r = attributeSale({ src: null, sck: 'v2', product_id: '5998559' }, resolve, { resolveProduct });
+    expect(r).toEqual({ channel_id: 'redef_de', attribution_source: 'auto' });
+  });
+
+  it('src prefix wins over the product owner', () => {
+    const r = attributeSale({ src: 'yt_cortes_de_x', product_id: '5998559' }, resolve, { resolveProduct });
+    expect(r.channel_id).toBe('cortes_de');
+  });
+
+  it('tolerates numeric ids and unknown products', () => {
+    expect(resolveProduct(7584832)).toBe('redef_de');
+    expect(resolveProduct('7547467')).toBe('redef_it');
+    expect(resolveProduct('999')).toBe(null);
+    expect(resolveProduct(null)).toBe(null);
+    expect(attributeSale({ src: 'nope', product_id: '999' }, resolve, { resolveProduct }).attribution_source).toBe('unmatched');
+  });
+
+  it('upsertSales attributes by product via the REAL config (German ebook → redef_de)', () => {
+    const db = makeDb();
+    upsertSales(db, [
+      { transaction_id: 'PV1', product_id: '5998559', commission_amount: 19.14, commission_currency: 'USD', src: null, sck: 'v2', order_date: '2026-05-02', refund_amount: 0 },
+    ]);
+    const row = db.prepare("SELECT channel_id, attribution_source FROM sales WHERE transaction_id='PV1'").get();
+    expect(row).toEqual({ channel_id: 'redef_de', attribution_source: 'auto' });
   });
 });
 

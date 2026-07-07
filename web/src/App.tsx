@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Overview } from './pages/Overview';
+import { Daily } from './pages/Daily';
 import { Channel } from './pages/Channel';
 import { Costs } from './pages/Costs';
 import { Settings } from './pages/Settings';
@@ -11,6 +12,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Overview /> },
+      { path: 'daily', element: <Daily /> },
       { path: 'channel/:id', element: <Channel /> },
       { path: 'costs', element: <Costs /> },
       { path: 'settings', element: <Settings /> },

@@ -8,7 +8,7 @@ import {
   syncChannelRevenue,
   checkMonetization,
 } from '../src/sync/youtube.js';
-import { chunkDateRange } from '../src/util/dates.js';
+import { chunkDateRange, daysBetween, addDays } from '../src/util/dates.js';
 
 const HEADERS = [
   { name: 'day' },
@@ -40,9 +40,14 @@ describe('youtube pure helpers', () => {
   });
 
   it('chunks a lifetime range', () => {
+    // Regression (2026-07-07): the clamp was inverted and the FIRST chunk swallowed
+    // the whole range — every chunk must respect `size` and they must tile [start, end].
     const chunks = chunkDateRange('2026-01-01', '2026-06-30', 90);
-    expect(chunks[0].from).toBe('2026-01-01');
+    expect(chunks.length).toBe(3); // 181 days / 90
+    expect(chunks[0]).toEqual({ from: '2026-01-01', to: '2026-03-31' });
     expect(chunks.at(-1).to).toBe('2026-06-30');
+    for (const c of chunks) expect(daysBetween(c.from, c.to)).toBeLessThan(90);
+    for (let i = 1; i < chunks.length; i++) expect(chunks[i].from).toBe(addDays(chunks[i - 1].to, 1));
   });
 });
 

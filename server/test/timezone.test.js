@@ -1,6 +1,6 @@
 // S7.3 — timezone, DST and leap-year handling made explicit.
 import { describe, it, expect } from 'vitest';
-import { todayLA, todayUTC, addDays, daysBetween, monthEnd, monthsBetween } from '../src/util/dates.js';
+import { todayLA, todayUTC, addDays, daysBetween, minDate, monthEnd, monthsBetween } from '../src/util/dates.js';
 
 describe('timezone: YouTube day is America/Los_Angeles', () => {
   it('LA date differs from UTC late at night', () => {
@@ -31,5 +31,15 @@ describe('leap year + DST safe date math', () => {
   it('daysBetween is inclusive-diff', () => {
     expect(daysBetween('2026-01-01', '2026-01-31')).toBe(30);
     expect(daysBetween('2026-01-31', '2026-01-01')).toBe(-30);
+  });
+  it('minDate returns the earlier date (clamps start to cutoff)', () => {
+    // Regression: a lifetime backfill starts at launch_date, which is BEFORE the
+    // D-2 cutoff. minDate must return launch_date, not the cutoff — otherwise the
+    // backfill collapses to a single day.
+    expect(minDate('2023-06-01', '2026-07-04')).toBe('2023-06-01');
+    // Future launch date must clamp down to the cutoff.
+    expect(minDate('2026-08-01', '2026-07-04')).toBe('2026-07-04');
+    // Equal dates return that date.
+    expect(minDate('2026-07-04', '2026-07-04')).toBe('2026-07-04');
   });
 });

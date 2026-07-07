@@ -28,8 +28,16 @@ describe('makeConverter', () => {
     expect(convert(580, 'BRL', 'USD', '2026-04-02')).toBeCloseTo(108, 6);
   });
 
-  it('throws for a date beyond the latest known rate', () => {
-    expect(() => convert(100, 'USD', 'BRL', '2026-05-01')).toThrow(/futuro|range/);
+  it('clamps forward to the newest rate for a date with no published rate yet', () => {
+    // 2026-04-04 is one day past the latest row (2026-04-03) → uses 2026-04-03 rates.
+    expect(convert(600, 'BRL', 'USD', '2026-04-04')).toBeCloseTo(110, 6); // 600/6.0*1.1
+    // Even a far-future date clamps to the newest rate rather than blanking the P&L.
+    expect(convert(600, 'BRL', 'USD', '2027-01-01')).toBeCloseTo(110, 6);
+  });
+
+  it('still errors when there is no FX data at all', () => {
+    const empty = makeConverter([]);
+    expect(() => empty(100, 'USD', 'BRL', '2026-04-01')).toThrow(/câmbio|range/);
   });
 });
 

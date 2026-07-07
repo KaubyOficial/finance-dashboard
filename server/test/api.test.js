@@ -29,6 +29,43 @@ describe('API integration', () => {
     expect(body.channels.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('GET /api/revenue/daily returns day-by-day revenue with channel breakdown', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/revenue/daily?${RANGE}` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    // 2026-04-10: AdSense $10 (redef_de) + $4 (cortes_de) and sale HP-1001 (R$58 → USD at 5.80/1.08).
+    const d = body.days.find((x) => x.date === '2026-04-10');
+    expect(d.revenue_youtube).toBeCloseTo(14, 6);
+    expect(d.revenue_hotmart).toBeCloseTo((58 / 5.8) * 1.08, 6);
+    expect(d.revenue_total).toBeCloseTo(14 + (58 / 5.8) * 1.08, 6);
+    const chans = Object.fromEntries(d.channels.map((c) => [c.channel_id, c]));
+    expect(chans.redef_de.revenue_youtube).toBeCloseTo(10, 6);
+    expect(chans.redef_de.revenue_hotmart).toBeCloseTo((58 / 5.8) * 1.08, 6);
+    expect(chans.cortes_de.revenue_youtube).toBeCloseTo(4, 6);
+
+    // 2026-06-15: refund of HP-1003 (R$300) lands on the refund date.
+    const refundDay = body.days.find((x) => x.date === '2026-06-15');
+    expect(refundDay.refunds).toBeCloseTo((300 / 5.8) * 1.08, 6);
+    expect(refundDay.revenue_total).toBeCloseTo(14 - (300 / 5.8) * 1.08, 6);
+
+    // Totals: 91 days × $14/day of AdSense (Apr–Jun 2026).
+    expect(body.totals.revenue_youtube).toBeCloseTo(91 * 14, 4);
+
+    // Days are chronological and it never includes costs.
+    const dates = body.days.map((x) => x.date);
+    expect([...dates].sort()).toEqual(dates);
+    expect(refundDay).not.toHaveProperty('cost_total');
+  });
+
+  it('GET /api/revenue/daily respects the channels filter', async () => {
+    const res = await app.inject({ method: 'GET', url: `/api/revenue/daily?${RANGE}&channels=cortes_de` });
+    const body = res.json();
+    const d = body.days.find((x) => x.date === '2026-04-10');
+    expect(d.revenue_youtube).toBeCloseTo(4, 6);
+    expect(d.channels.length).toBe(1);
+  });
+
   it('adding a cost reduces profit (margin moves)', async () => {
     const before = (await app.inject({ method: 'GET', url: `/api/pnl?${RANGE}` })).json().network.profit;
     const create = await app.inject({

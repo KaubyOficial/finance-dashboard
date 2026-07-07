@@ -3,6 +3,7 @@ import { api } from '../api';
 import type { Cost, CsvImportResult, Currency } from '../api';
 import { useApi } from '../lib/useApi';
 import { money, dateBR } from '../format';
+import { DateField } from '../components/DateField';
 import { Spinner, ErrorState, EmptyState } from '../components/states';
 
 const CURRENCIES: Currency[] = ['USD', 'BRL', 'EUR'];
@@ -12,12 +13,16 @@ export function Costs() {
   const cfg = useApi(() => api.config(), []);
   const [busy, setBusy] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [delErr, setDelErr] = useState<string | null>(null);
 
   async function remove(id: number) {
+    setDelErr(null);
     setBusy(true);
     try {
       await api.deleteCost(id);
       costsQ.reload();
+    } catch (e) {
+      setDelErr((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -42,6 +47,7 @@ export function Costs() {
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <section className="card overflow-x-auto">
           <h2 className="p-4 pb-2 text-sm font-semibold">Lançamentos</h2>
+          {delErr && <p className="px-4 pb-2 text-xs" style={{ color: 'var(--neg)' }}>Falha ao excluir: {delErr}</p>}
           {costsQ.loading ? (
             <Spinner />
           ) : costsQ.error ? (
@@ -96,7 +102,7 @@ export function Costs() {
 }
 
 function CostForm({ channels, onSubmit, busy, error }: { channels: { id: string; name: string }[]; onSubmit: (c: Partial<Cost>) => void; busy: boolean; error: string | null }) {
-  const [kind, setKind] = useState<'recurring' | 'one_off'>('recurring');
+  const [kind, setKind] = useState<'recurring' | 'one_off'>('one_off');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -128,7 +134,7 @@ function CostForm({ channels, onSubmit, busy, error }: { channels: { id: string;
     <form onSubmit={submit} className="card flex flex-col gap-2.5 p-4">
       <h2 className="text-sm font-semibold">Novo custo</h2>
       <div className="flex gap-2">
-        {(['recurring', 'one_off'] as const).map((k) => (
+        {(['one_off', 'recurring'] as const).map((k) => (
           <button type="button" key={k} onClick={() => setKind(k)} className="flex-1 rounded-lg border px-2 py-1 text-xs" style={{ ...st, background: kind === k ? 'var(--accent-soft)' : 'transparent', color: kind === k ? 'var(--accent)' : 'var(--text-muted)' }}>
             {k === 'recurring' ? 'Recorrente' : 'Avulso'}
           </button>
@@ -159,13 +165,13 @@ function CostForm({ channels, onSubmit, busy, error }: { channels: { id: string;
         </select>
       )}
       <div className="flex items-center gap-2 text-xs">
-        <label className="muted">{kind === 'recurring' ? 'Início' : 'Data'}</label>
-        <input type="date" className={input} style={st} value={start} onChange={(e) => setStart(e.target.value)} />
+        <label className="muted w-24">{kind === 'recurring' ? 'Início' : 'Data'}</label>
+        <DateField required value={start} onChange={setStart} className="flex-1" />
       </div>
       {kind === 'recurring' && (
         <div className="flex items-center gap-2 text-xs">
-          <label className="muted">Fim (opcional)</label>
-          <input type="date" className={input} style={st} value={end} onChange={(e) => setEnd(e.target.value)} />
+          <label className="muted w-24">Fim (opcional)</label>
+          <DateField allowEmpty value={end} onChange={setEnd} className="flex-1" />
         </div>
       )}
       {error && <p className="text-xs" style={{ color: 'var(--neg)' }}>{error}</p>}

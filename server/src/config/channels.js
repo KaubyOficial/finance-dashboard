@@ -17,6 +17,9 @@ const channelSchema = z.object({
   youtube_channel_id: z.string().default(''),
   google_account: z.string().default(''),
   src_prefixes: z.array(z.string().min(1)).min(1, 'ao menos 1 src_prefix'),
+  // Attribution fallback: Hotmart product IDs owned by this channel (used when the
+  // sale's src/sck matches no prefix). Numbers are tolerated and normalized to strings.
+  hotmart_product_ids: z.array(z.union([z.string().min(1), z.number()]).transform(String)).default([]),
   launch_date: z.string().regex(ISO_DATE, 'launch_date deve ser YYYY-MM-DD'),
   reference_currency: z.enum(CURRENCIES).default('USD'),
 });
@@ -64,6 +67,7 @@ export function validateChannelsConfig(filePath = channelsConfigPath) {
 
   const seenIds = new Set();
   const prefixOwner = new Map(); // lowercased prefix -> channel id
+  const productOwner = new Map(); // hotmart product id -> channel id
   for (const ch of cfg.channels) {
     if (seenIds.has(ch.id)) errors.push(`id duplicado: "${ch.id}"`);
     seenIds.add(ch.id);
@@ -76,6 +80,15 @@ export function validateChannelsConfig(filePath = channelsConfigPath) {
         );
       }
       prefixOwner.set(p, ch.id);
+    }
+
+    for (const pid of ch.hotmart_product_ids) {
+      if (productOwner.has(pid) && productOwner.get(pid) !== ch.id) {
+        errors.push(
+          `colisão de hotmart_product_id "${pid}" entre "${productOwner.get(pid)}" e "${ch.id}" (atribuição ambígua)`
+        );
+      }
+      productOwner.set(pid, ch.id);
     }
 
     if (!ch.youtube_channel_id) warnings.push(`canal "${ch.id}": youtube_channel_id PENDENTE`);
@@ -113,7 +126,28 @@ export function buildAttributionResolver(channels) {
   };
 }
 
-/** Upsert config channels into the DB. Preserves runtime flags (monetized). */
+/**
+ * Build a product_id → channelId resolver (attribution FALLBACK — src/sck prefix
+ * match takes priority). Products are language-specific, so each maps to exactly
+ * one channel.
+ */
+export function buildProductResolver(channels) {
+  const byProduct = new Map();
+  for (const ch of channels) {
+    for (const pid of ch.hotmart_product_ids || []) byProduct.set(String(pid), ch.id);
+  }
+  return function resolveProduct(productId) {
+    if (productId == null) return null;
+    return byProduct.get(String(productId)) || null;
+  };
+}
+
+/**
+ * Upsert config channels into the DB. Preserves runtime flags (monetized).
+ * Channels present in the DB but REMOVED from the config are pruned: deleted
+ * when they have no data (revenue/sales/costs), deactivated otherwise so any
+ * historical numbers stay queryable.
+ */
 export function syncChannelsFromConfig(db, filePath = channelsConfigPath) {
   const channels = getConfigChannels(filePath);
   const existing = new Set(db.prepare('SELECT id FROM channels').all().map((r) => r.id));
@@ -128,8 +162,16 @@ export function syncChannelsFromConfig(db, filePath = channelsConfigPath) {
       reference_currency = excluded.reference_currency,
       updated_at = datetime('now')
   `);
+  const hasData = db.prepare(`
+    SELECT (SELECT COUNT(*) FROM revenue_daily WHERE channel_id = ?)
+         + (SELECT COUNT(*) FROM sales WHERE channel_id = ?)
+         + (SELECT COUNT(*) FROM costs WHERE channel_id = ?) AS n
+  `);
   let added = 0;
   let updated = 0;
+  let removed = 0;
+  let deactivated = 0;
+  const configIds = new Set(channels.map((c) => c.id));
   const tx = db.transaction(() => {
     for (const ch of channels) {
       upsert.run({
@@ -143,7 +185,17 @@ export function syncChannelsFromConfig(db, filePath = channelsConfigPath) {
       if (existing.has(ch.id)) updated++;
       else added++;
     }
+    for (const id of existing) {
+      if (configIds.has(id)) continue;
+      if (hasData.get(id, id, id).n === 0) {
+        db.prepare('DELETE FROM channels WHERE id = ?').run(id);
+        removed++;
+      } else {
+        db.prepare("UPDATE channels SET active = 0, updated_at = datetime('now') WHERE id = ?").run(id);
+        deactivated++;
+      }
+    }
   });
   tx();
-  return { added, updated };
+  return { added, updated, removed, deactivated };
 }

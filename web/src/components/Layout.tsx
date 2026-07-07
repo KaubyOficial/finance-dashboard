@@ -8,6 +8,7 @@ import { dateBR } from '../format';
 
 const NAV = [
   { to: '/', label: 'Overview', end: true },
+  { to: '/daily', label: 'Receita diária', end: false },
   { to: '/costs', label: 'Custos', end: false },
   { to: '/settings', label: 'Sync & Config', end: false },
 ];

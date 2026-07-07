@@ -1,5 +1,6 @@
 import { useFilters, type Preset } from '../store';
 import type { Currency } from '../api';
+import { DateField } from './DateField';
 
 const PRESETS: { key: Preset; label: string }[] = [
   { key: '3m', label: '3M' },
@@ -20,9 +21,9 @@ export function FilterBar() {
           </button>
         ))}
       </div>
-      <input aria-label="de" type="date" value={from} onChange={(e) => set({ from: e.target.value })} className="rounded-lg border bg-transparent px-2 py-1 text-sm" style={{ borderColor: 'var(--border)' }} />
+      <DateField ariaLabel="de" value={from} onChange={(iso) => set({ from: iso })} className="w-36" />
       <span className="muted">→</span>
-      <input aria-label="até" type="date" value={to} onChange={(e) => set({ to: e.target.value })} className="rounded-lg border bg-transparent px-2 py-1 text-sm" style={{ borderColor: 'var(--border)' }} />
+      <DateField ariaLabel="até" value={to} onChange={(iso) => set({ to: iso })} className="w-36" />
       <div className="flex overflow-hidden rounded-lg border" style={{ borderColor: 'var(--border)' }}>
         {CURRENCIES.map((c) => (
           <button
