@@ -59,6 +59,15 @@
       "src_prefixes": ["yt_orchestral_a"],
       "launch_date": "2026-05-01",
       "reference_currency": "USD"
+    },
+    {
+      "id": "satisfying_visuals",
+      "name": "Satisfying Visuals",
+      "youtube_channel_id": "UCHcEMYHxBiCzYa5dSu8IsOg",
+      "google_account": "kaue.s02contato@gmail.com",
+      "src_prefixes": ["yt_satisfying_visuals"],
+      "launch_date": "2024-01-01",
+      "reference_currency": "USD"
     }
   ]
 }
