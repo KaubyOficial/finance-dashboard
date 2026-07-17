@@ -3,7 +3,7 @@
 import { getDb } from '../src/db/index.js';
 import { runMigrations } from '../src/db/migrate.js';
 import { authorizeAccount } from '../src/auth/google.js';
-import { googleConfigured } from '../src/env.js';
+import { googleConfigured, googleCredentials } from '../src/env.js';
 import { log } from '../src/logger.js';
 
 function argValue(flag) {
@@ -16,7 +16,7 @@ if (!account) {
   console.error('Uso: npm run auth -- --account <nome-da-conta>');
   process.exit(1);
 }
-if (!googleConfigured()) {
+if (!googleConfigured(account)) {
   console.error('GOOGLE_CLIENT_ID/SECRET ausentes no .env. Ver docs/setup-google.md.');
   process.exit(1);
 }
@@ -24,6 +24,12 @@ if (!googleConfigured()) {
 const db = getDb();
 runMigrations(db);
 try {
+  const { clientId, source } = googleCredentials(account);
+  log.info(
+    source === 'account'
+      ? `Usando o client OAuth próprio da conta "${account}" (…${clientId.slice(-14)}).`
+      : `Usando o client OAuth compartilhado (…${clientId.slice(-14)}).`
+  );
   const r = await authorizeAccount(db, account);
   log.info(`✅ Conta "${r.account}" autorizada${r.email ? ` (${r.email})` : ''}.`);
   process.exit(0);

@@ -4,7 +4,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { OAuth2Client } from 'google-auth-library';
-import { env } from '../env.js';
+import { env, googleCredentials } from '../env.js';
 import { log } from '../logger.js';
 import { saveToken, getRefreshToken, markRefreshed, markRevoked } from './tokenStore.js';
 
@@ -20,11 +20,13 @@ function redirectUri() {
   return `http://127.0.0.1:${env.google.redirectPort}/oauth2callback`;
 }
 
-function makeClient() {
-  if (!env.google.clientId || !env.google.clientSecret) {
+/** OAuth client for `account` — its own credentials when overridden, else the shared one. */
+function makeClient(account) {
+  const { clientId, clientSecret } = googleCredentials(account);
+  if (!clientId || !clientSecret) {
     throw new Error('GOOGLE_CLIENT_ID/SECRET ausentes no .env (ver docs/setup-google.md)');
   }
-  return new OAuth2Client(env.google.clientId, env.google.clientSecret, redirectUri());
+  return new OAuth2Client(clientId, clientSecret, redirectUri());
 }
 
 function openBrowser(url) {
@@ -58,11 +60,14 @@ function emailFromIdToken(idToken) {
  */
 export function authorizeAccount(db, account) {
   return new Promise((resolve, reject) => {
-    const client = makeClient();
+    const client = makeClient(account);
     const state = crypto.randomBytes(16).toString('hex');
     const url = client.generateAuthUrl({
       access_type: 'offline',
-      prompt: 'consent', // force refresh_token even on re-auth
+      // 'consent' forces a refresh_token even on re-auth; 'select_account' keeps Google's
+      // identity picker on screen. Without it the flow binds to the signed-in personal
+      // channel and a delegated Brand Account channel can never be chosen (R2).
+      prompt: 'consent select_account',
       scope: YT_SCOPES,
       state,
       include_granted_scopes: true,
@@ -124,7 +129,7 @@ export async function getAccessToken(db, account) {
   if (!refreshToken) {
     throw new Error(`Conta "${account}" sem token válido — rode: npm run auth -- --account ${account}`);
   }
-  const client = makeClient();
+  const client = makeClient(account);
   client.setCredentials({ refresh_token: refreshToken });
   try {
     const { token } = await client.getAccessToken();

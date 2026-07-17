@@ -10,8 +10,18 @@ import { bumpDataVersion } from '../engine/query.js';
 import { notifyDesktop } from '../util/notify.js';
 import { log } from '../logger.js';
 
-/** Find a non-revoked OAuth account able to reach a channel (by email/label). */
+/** Find a non-revoked OAuth account able to reach a channel (by id, then email/label). */
 export function resolveAccountForChannel(db, channel) {
+  // Convention: each channel is authorized with `npm run auth -- --account <channel.id>`.
+  // This exact binding wins because email is NOT unique per channel: a delegated Brand
+  // Account channel has no email of its own, so its token carries the *delegate's* email
+  // — the same email as that delegate's own channel. Matching on email alone would then
+  // resolve to whichever row SQLite returned first and silently sync the wrong channel.
+  const byId = db
+    .prepare('SELECT account FROM oauth_tokens WHERE revoked = 0 AND account = ? LIMIT 1')
+    .get(channel.id);
+  if (byId) return byId.account;
+
   const acct = channel.google_account;
   if (acct) {
     const row = db
